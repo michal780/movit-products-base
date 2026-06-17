@@ -9,7 +9,9 @@ k nasazení jako **samostatný web s vlastním backendem**, takže AI analýzy
 - `src/App.jsx` – celá aplikace (React, jeden soubor).
 - `src/main.jsx`, `index.html` – vstupní body.
 - `api/analyze.js` – serverless proxy na Anthropic API (drží API klíč na serveru).
-- Perzistence dat běží přes `localStorage` (per prohlížeč) – každý tester má svá data.
+- `api/store.js` – serverless sdílené úložiště (Redis) – volitelné, viz níže.
+- Perzistence dat: se sdíleným úložištěm (Redis) jsou data **společná pro všechny**;
+  bez něj se použije `localStorage` (každý prohlížeč má vlastní data).
 
 ## Rychlé nasazení na Vercel (doporučeno, ~5 minut)
 
@@ -40,6 +42,24 @@ Aplikace má vlastní přihlášení (demo účty):
 - `nahled` / `nahled` – jen náhled (smí přidat nový produkt)
 
 > Pozn.: toto přihlášení je klientské (slouží k oddělení rolí v UI), ne k zabezpečení dat.
+
+## Sdílení dat mezi uživateli (společná data, historie analýz)
+Bez nastavení níže si **každý uživatel ukládá data jen do svého prohlížeče** (localStorage),
+takže kolegové navzájem nevidí svoje produkty ani historii analýz. Pokud chceš, aby všichni
+sdíleli stejná data, přidej Redis úložiště – je to pár kliknutí a má free tier:
+
+1. Ve Vercelu otevři svůj projekt → záložka **Storage** → **Create Database**
+   (nebo „Connect Database") → v **Marketplace** vyber **Redis** (Upstash) → vytvoř ji
+   a připoj k tomuto projektu.
+2. Vercel sám doplní potřebné env proměnné (`KV_REST_API_URL` a `KV_REST_API_TOKEN`,
+   příp. `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`). Nic dalšího nepřidáváš.
+3. Klikni **Redeploy** (Deployments → … → Redeploy). Od té chvíle jsou data společná –
+   všichni uživatelé vidí stejné produkty, analýzy i historii.
+
+Poznámky:
+- Jde o jeden **společný** testovací prostor – co jeden uživatel upraví/smaže, mění se všem
+  (poslední uložení vyhrává). Pro testování je to obvykle žádoucí.
+- Když Redis nenastavíš, aplikace funguje dál, jen každý vidí jen svá data v daném prohlížeči.
 
 ## Zabezpečení a náklady (důležité)
 - Endpoint `/api/analyze` je po nasazení veřejný – kdokoli s URL může spouštět analýzy,
