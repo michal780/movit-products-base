@@ -6,16 +6,19 @@ import {
 } from "recharts";
 
 /* ------------------------------------------------------------------
-   Perzistence: ve standalone webu nahrazuje artefaktové window.storage
-   jednoduchým úložištěm nad localStorage (per prohlížeč/uživatel).
+   Perzistence (standalone web):
+   - Když je nastavené sdílené úložiště (Redis přes /api/store), data jsou
+     SPOLEČNÁ pro všechny uživatele (vidí stejné produkty, analýzy i historii).
+   - Když sdílené úložiště dostupné není, použije se localStorage daného
+     prohlížeče (per uživatel) – aplikace tak funguje vždy.
 ------------------------------------------------------------------ */
 if (typeof window !== "undefined" && !window.storage) {
   const KP = "movit::";
-  window.storage = {
-    async get(key) { const v = localStorage.getItem(KP + key); return v === null ? null : { key, value: v }; },
-    async set(key, value) { localStorage.setItem(KP + key, value); return { key, value }; },
-    async delete(key) { localStorage.removeItem(KP + key); return { key, deleted: true }; },
-    async list(prefix = "") {
+  const local = {
+    get(key) { const v = localStorage.getItem(KP + key); return v === null ? null : { key, value: v }; },
+    set(key, value) { localStorage.setItem(KP + key, value); return { key, value }; },
+    delete(key) { localStorage.removeItem(KP + key); return { key, deleted: true }; },
+    list(prefix = "") {
       const keys = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
@@ -23,6 +26,21 @@ if (typeof window !== "undefined" && !window.storage) {
       }
       return { keys, prefix };
     },
+  };
+  const call = async (action, payload) => {
+    const r = await fetch("/api/store", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...payload }),
+    });
+    if (!r.ok) throw new Error("store " + r.status);
+    return r.json();
+  };
+  window.storage = {
+    async get(key) { try { return await call("get", { key }); } catch (e) { return local.get(key); } },
+    async set(key, value) { try { return await call("set", { key, value }); } catch (e) { return local.set(key, value); } },
+    async delete(key) { try { return await call("delete", { key }); } catch (e) { return local.delete(key); } },
+    async list(prefix = "") { try { return await call("list", { prefix }); } catch (e) { return local.list(prefix); } },
   };
 }
 
